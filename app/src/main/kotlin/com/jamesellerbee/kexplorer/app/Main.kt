@@ -16,14 +16,8 @@ import com.jamesellerbee.kexplorer.app.ui.theme.AppTheme
 @Composable
 @Preview
 fun App() {
-    var text by remember { mutableStateOf("Hello, World!") }
-
     AppTheme {
-        Button(onClick = {
-            text = "Hello, Desktop!"
-        }) {
-            MainView.view.value.invoke()
-        }
+        MainView.view.value.invoke()
     }
 }
 

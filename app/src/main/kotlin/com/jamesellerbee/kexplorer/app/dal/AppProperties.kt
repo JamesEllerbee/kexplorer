@@ -7,6 +7,10 @@ object AppProperties {
         get() = Defaults.defaultHomeDir
 
     object Defaults {
-        val defaultHomeDir = "${File.separator}Users${File.separator}${System.getProperty("user.name")}"
+        val defaultHomeDir = if(System.getProperty("os.name").contains("Windows")) {
+            "${File.separator}Users${File.separator}${System.getProperty("user.name")}"
+        } else {
+            "/home/${System.getProperty("user.name")}"
+        }
     }
 }
