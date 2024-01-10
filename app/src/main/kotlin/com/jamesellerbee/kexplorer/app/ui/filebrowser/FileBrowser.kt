@@ -41,6 +41,7 @@ import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.window.Dialog
 import com.jamesellerbee.kexplorer.app.dal.AppProperties
 import com.jamesellerbee.kexplorer.app.dal.FileSystem
+import com.jamesellerbee.kexplorer.app.dal.Shell
 import com.jamesellerbee.kexplorer.app.ui.theme.spacing
 import java.io.File
 
@@ -69,7 +70,8 @@ sealed class FileBrowserInteraction {
     }
 
     sealed class OpenInDialogInteraction : FileBrowserInteraction() {
-        data object DismissOpenInDialogInteraction : OpenInDialogInteraction()
+        data class OpenFileInApplication(val application: String, val fileName: String) : OpenInDialogInteraction()
+        data object DismissOpenInDialog : OpenInDialogInteraction()
     }
 }
 
@@ -157,8 +159,12 @@ class FileBrowserViewModel(private val fileSystem: FileSystem = FileSystem) {
                 showFilePreviewDialog.value = false
             }
 
-            FileBrowserInteraction.OpenInDialogInteraction.DismissOpenInDialogInteraction -> {
+            FileBrowserInteraction.OpenInDialogInteraction.DismissOpenInDialog -> {
                 showOpenInDialog.value = false
+            }
+
+            is FileBrowserInteraction.OpenInDialogInteraction.OpenFileInApplication -> {
+                Shell.run(interaction.application, joinPath(interaction.fileName))
             }
         }
     }
@@ -388,7 +394,7 @@ fun FileContextMenu(viewModel: FileBrowserViewModel, fileName: String) {
 @Composable
 fun OpenInDialog(viewModel: FileBrowserViewModel) {
     Dialog(onDismissRequest = {
-        viewModel.onInteraction(FileBrowserInteraction.OpenInDialogInteraction.DismissOpenInDialogInteraction)
+        viewModel.onInteraction(FileBrowserInteraction.OpenInDialogInteraction.DismissOpenInDialog)
     }) {
         Column(Modifier.background(MaterialTheme.colors.background).padding(MaterialTheme.spacing.medium)) {
             if (AppProperties.applications.isEmpty()) {
@@ -397,7 +403,7 @@ fun OpenInDialog(viewModel: FileBrowserViewModel) {
                 Text("Applications:")
                 AppProperties.applications.forEach { (key, value) ->
                     Row(Modifier.clickable {
-
+                        viewModel.onInteraction(FileBrowserInteraction.OpenInDialogInteraction.OpenFileInApplication(value, viewModel.showContextMenuForFileName.value ?: ""))
                     }) {
                         Text(key)
                     }
