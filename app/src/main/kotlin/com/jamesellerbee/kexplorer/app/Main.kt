@@ -14,8 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import com.jamesellerbee.kexplorer.app.bl.MainView
 import com.jamesellerbee.kexplorer.app.bl.WindowManager
+import com.jamesellerbee.kexplorer.app.bl.WindowStateProvider
 import com.jamesellerbee.kexplorer.app.ui.settings.AppSettings
 import com.jamesellerbee.kexplorer.app.ui.theme.AppTheme
 
@@ -42,10 +44,14 @@ fun App() {
 }
 
 fun main() = application {
+    val windowState = rememberWindowState()
+    WindowStateProvider.windowState = windowState
+
     // main window, closing this terminates the app
-    Window(onCloseRequest = ::exitApplication) {
+    Window(state = windowState, onCloseRequest = ::exitApplication) {
         App()
     }
+
 
     // other windows, closing these only hides them
     WindowManager.windowData.forEach { windowData ->

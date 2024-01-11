@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.onClick
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -23,14 +24,17 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,173 +43,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.window.Dialog
-import com.jamesellerbee.kexplorer.app.dal.AppProperties
-import com.jamesellerbee.kexplorer.app.dal.FileSystem
-import com.jamesellerbee.kexplorer.app.dal.Shell
+import com.jamesellerbee.kexplorer.app.bl.WindowStateProvider
+import com.jamesellerbee.kexplorer.app.dal.AppPropertiesProvider
 import com.jamesellerbee.kexplorer.app.ui.theme.spacing
-import java.io.File
-
-sealed class FileBrowserInteraction {
-    data object GoToParentDirectory : FileBrowserInteraction()
-    data object GoToHomeDirectory : FileBrowserInteraction()
-    data class SelectFile(val name: String) : FileBrowserInteraction()
-    data class SaveFile(val name: String, val isDirectory: Boolean) : FileBrowserInteraction()
-    data class ShowFileContextMenu(val name: String) : FileBrowserInteraction()
-    data object DismissFileContextMenu : FileBrowserInteraction()
-    data object ShowFileCreationDialog : FileBrowserInteraction()
-    data object ShowOpenInDialog : FileBrowserInteraction()
-
-    sealed class FileContextMenuInteraction : FileBrowserInteraction() {
-        data class DeleteFile(val fileName: String) : FileContextMenuInteraction()
-        data class PreviewFile(val fileName: String) : FileContextMenuInteraction()
-    }
-
-    sealed class FileCreationDialogInteraction : FileBrowserInteraction() {
-        data object DismissFileCreationDialog : FileCreationDialogInteraction()
-    }
-
-    sealed class FilePreviewDialogInteraction : FileBrowserInteraction() {
-        data object DismissFilePreviewDialog : FilePreviewDialogInteraction()
-
-    }
-
-    sealed class OpenInDialogInteraction : FileBrowserInteraction() {
-        data class OpenFileInApplication(val application: String, val fileName: String) : OpenInDialogInteraction()
-        data object DismissOpenInDialog : OpenInDialogInteraction()
-    }
-}
-
-class FileBrowserViewModel(private val fileSystem: FileSystem = FileSystem) {
-    private var workingDirectory = AppProperties.homeDir
-    val workingDirectoryText = mutableStateOf(workingDirectory)
-    val files = mutableStateListOf<File>()
-    val selectedFileName = mutableStateOf<String?>(null)
-    val showContextMenuForFileName = mutableStateOf<String?>(null)
-    val showFileCreationDialog = mutableStateOf(false)
-    val showFilePreviewDialog = mutableStateOf(false)
-    val selectedFileContent = mutableStateOf("")
-    val showOpenInDialog = mutableStateOf(false)
-
-    init {
-        updateWorkingDirectory(workingDirectory)
-    }
-
-    fun onInteraction(interaction: FileBrowserInteraction) {
-        when (interaction) {
-            FileBrowserInteraction.GoToParentDirectory -> {
-                if (fileSystem.getParentDirectoryPath(workingDirectory) == null) {
-                    return
-                }
-
-                updateWorkingDirectory(fileSystem.getParentDirectoryPath(workingDirectory)!!)
-            }
-
-            FileBrowserInteraction.GoToHomeDirectory -> {
-                updateWorkingDirectory(AppProperties.homeDir)
-            }
-
-            is FileBrowserInteraction.SelectFile -> {
-                val targetPath = joinPath(interaction.name)
-
-                if (selectedFileName.value == interaction.name
-                    && fileSystem.isDirectory(targetPath)
-                ) {
-                    updateWorkingDirectory(targetPath)
-                } else if (selectedFileName.value == interaction.name
-                    && !fileSystem.isDirectory(targetPath)
-                ) {
-                    previewFile(targetPath)
-                } else {
-                    selectedFileName.value = interaction.name
-                }
-            }
-
-            is FileBrowserInteraction.SaveFile -> {
-                fileSystem.createFile(joinPath(interaction.name))
-                refreshListing()
-                showFileCreationDialog.value = false
-            }
-
-            is FileBrowserInteraction.ShowFileContextMenu -> {
-                showContextMenuForFileName.value = interaction.name
-            }
-
-            FileBrowserInteraction.DismissFileContextMenu -> {
-                showContextMenuForFileName.value = null
-            }
-
-            FileBrowserInteraction.ShowFileCreationDialog -> {
-                showFileCreationDialog.value = true
-            }
-
-            FileBrowserInteraction.ShowOpenInDialog -> {
-                showOpenInDialog.value = true
-            }
-
-            is FileBrowserInteraction.FileContextMenuInteraction.DeleteFile -> {
-                fileSystem.deletePath(joinPath(interaction.fileName))
-                refreshListing()
-            }
-
-            is FileBrowserInteraction.FileContextMenuInteraction.PreviewFile -> {
-                previewFile(joinPath(interaction.fileName))
-            }
-
-            FileBrowserInteraction.FileCreationDialogInteraction.DismissFileCreationDialog -> {
-                showFileCreationDialog.value = false
-            }
-
-            FileBrowserInteraction.FilePreviewDialogInteraction.DismissFilePreviewDialog -> {
-                showFilePreviewDialog.value = false
-            }
-
-            FileBrowserInteraction.OpenInDialogInteraction.DismissOpenInDialog -> {
-                showOpenInDialog.value = false
-            }
-
-            is FileBrowserInteraction.OpenInDialogInteraction.OpenFileInApplication -> {
-                Shell.run(interaction.application, joinPath(interaction.fileName))
-            }
-        }
-    }
-
-    private fun previewFile(targetPath: String) {
-        if (fileSystem.isTextFile(targetPath)) {
-            selectedFileContent.value = fileSystem.readContent(targetPath)
-        } else {
-            selectedFileContent.value =
-                "This file does not appear to be a text file. Only previewing of text files is supported."
-        }
-        showFilePreviewDialog.value = true
-    }
-
-    private fun updateWorkingDirectory(path: String) {
-        workingDirectory = path
-        workingDirectoryText.value = workingDirectory
-        refreshListing()
-    }
-
-    private fun refreshListing() {
-        files.clear()
-        val listing = fileSystem.getListing(workingDirectory)
-        val directories = listing.filter { it.isDirectory }.sortedBy { it.name }
-        val filesInWorkingDirectory = listing.filter { !it.isDirectory }.sortedBy { it.name }
-        files.addAll(directories)
-        files.addAll(filesInWorkingDirectory)
-        selectedFileName.value = null
-    }
-
-    private fun joinPath(fileName: String): String {
-        val path = StringBuilder(workingDirectory)
-
-        if (workingDirectory != File.separator) {
-            path.append(File.separator)
-        }
-
-        path.append(fileName)
-        return path.toString()
-    }
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -238,45 +78,84 @@ fun FileBrowser() {
                 Icon(Icons.Default.ArrowUpward, "Go to parent directory")
             }
 
-            OutlinedTextField(value = viewModel.workingDirectoryText.value, onValueChange = {}, label = {
-                Text("Working directory")
-            })
+            OutlinedTextField(
+                value = viewModel.workingDirectoryText.value,
+                onValueChange = {
+                    viewModel.onInteraction(FileBrowserInteraction.SetWorkingDirectoryText(it))
+                },
+                label = {
+                    Text("Working directory")
+                },
+                trailingIcon = {
+                    Row {
+                        if (viewModel.workingDirectoryText.value != viewModel.workingDirectory) {
+                            IconButton(onClick = {
+
+                            }) {
+                                Icon(Icons.Default.ArrowForward, "Go to")
+                            }
+                        }
+
+                        IconButton(onClick = {
+                            viewModel.onInteraction(FileBrowserInteraction.RefreshListing)
+                        }) {
+                            Icon(Icons.Default.Refresh, "Refresh")
+                        }
+                    }
+                },
+                singleLine = true,
+                modifier = Modifier.widthIn(max = WindowStateProvider.windowState.size.width * 0.5f)
+            )
 
             IconButton(onClick = {
                 viewModel.onInteraction(FileBrowserInteraction.ShowFileCreationDialog)
             }) {
                 Icon(Icons.Default.NoteAdd, "Create new file")
             }
+
+            IconButton(onClick = {
+                AppPropertiesProvider.setShowHiddenFiles(!AppPropertiesProvider.showHiddenFiles.value)
+            }) {
+                if (AppPropertiesProvider.showHiddenFiles.value) {
+                    Icon(Icons.Default.Visibility, "Hide hidden files")
+                } else {
+                    Icon(Icons.Default.VisibilityOff, "Show hidden files")
+                }
+            }
         }
 
         Divider(Modifier.fillMaxWidth())
 
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            viewModel.files.forEach { file ->
-                if (!file.name.startsWith(".")) {
-                    val itemColor = if (file.name == viewModel.selectedFileName.value) {
-                        MaterialTheme.colors.secondary
-                    } else {
-                        Color.Transparent
+            val files = if (AppPropertiesProvider.showHiddenFiles.value) {
+                viewModel.files
+            } else {
+                viewModel.files.filter { !it.name.startsWith(".") }
+            }
+
+            files.forEach { file ->
+                val itemColor = if (file.name == viewModel.selectedFileName.value) {
+                    MaterialTheme.colors.secondary
+                } else {
+                    Color.Transparent
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
+                        viewModel.onInteraction(FileBrowserInteraction.SelectFile(file.name))
+                    }.onClick(matcher = PointerMatcher.mouse(PointerButton.Secondary)) {
+                        viewModel.onInteraction(FileBrowserInteraction.ShowFileContextMenu(file.name))
+                    }.background(itemColor)
+                ) {
+                    if (file.isDirectory) {
+                        Icon(Icons.Default.Folder, "Directory")
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable {
-                            viewModel.onInteraction(FileBrowserInteraction.SelectFile(file.name))
-                        }.onClick(matcher = PointerMatcher.mouse(PointerButton.Secondary)) {
-                            viewModel.onInteraction(FileBrowserInteraction.ShowFileContextMenu(file.name))
-                        }.background(itemColor)
-                    ) {
-                        if (file.isDirectory) {
-                            Icon(Icons.Default.Folder, "Directory")
-                        }
+                    Text(file.name)
 
-                        Text(file.name)
-
-                        if (viewModel.showContextMenuForFileName.value == file.name) {
-                            FileContextMenu(viewModel, file.name)
-                        }
+                    if (viewModel.showContextMenuForFileName.value == file.name) {
+                        FileContextMenu(viewModel, file.name)
                     }
                 }
             }
@@ -397,13 +276,18 @@ fun OpenInDialog(viewModel: FileBrowserViewModel) {
         viewModel.onInteraction(FileBrowserInteraction.OpenInDialogInteraction.DismissOpenInDialog)
     }) {
         Column(Modifier.background(MaterialTheme.colors.background).padding(MaterialTheme.spacing.medium)) {
-            if (AppProperties.applications.isEmpty()) {
+            if (AppPropertiesProvider.applications.isEmpty()) {
                 Text("There are no applications configured. Go to app settings and add applications to use this feature.")
             } else {
                 Text("Applications:")
-                AppProperties.applications.forEach { (key, value) ->
+                AppPropertiesProvider.applications.forEach { (key, value) ->
                     Row(Modifier.clickable {
-                        viewModel.onInteraction(FileBrowserInteraction.OpenInDialogInteraction.OpenFileInApplication(value, viewModel.showContextMenuForFileName.value ?: ""))
+                        viewModel.onInteraction(
+                            FileBrowserInteraction.OpenInDialogInteraction.OpenFileInApplication(
+                                value,
+                                viewModel.showContextMenuForFileName.value ?: ""
+                            )
+                        )
                     }) {
                         Text(key)
                     }

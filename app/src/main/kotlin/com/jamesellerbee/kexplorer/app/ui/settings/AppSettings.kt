@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Button
+import androidx.compose.material.Checkbox
+import androidx.compose.material.Divider
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
@@ -25,7 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.jamesellerbee.kexplorer.app.bl.MainView
-import com.jamesellerbee.kexplorer.app.dal.AppProperties
+import com.jamesellerbee.kexplorer.app.dal.AppPropertiesProvider
 import com.jamesellerbee.kexplorer.app.ui.filebrowser.FileBrowser
 import com.jamesellerbee.kexplorer.app.ui.theme.spacing
 
@@ -36,17 +38,13 @@ fun AppSettings() {
             ApplicationsSetting()
         }
 
+        Divider(Modifier.fillMaxWidth())
+
         Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
             Button(onClick = {
                 MainView.view.value = { FileBrowser() }
             }) {
-                Text("Apply")
-            }
-
-            Button(onClick = {
-                MainView.view.value = { FileBrowser() }
-            }) {
-                Text("Cancel")
+                Text("Back")
             }
         }
     }
@@ -61,21 +59,30 @@ fun ApplicationsSetting() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Applications")
 
-        IconButton(onClick = {
-            showFields = true
-        }) {
-            Icon(Icons.Default.AddCircle, "Add")
+        if (!showFields) {
+            IconButton(onClick = {
+                showFields = true
+            }) {
+                Icon(Icons.Default.AddCircle, "Add")
+            }
         }
     }
 
-    if (AppProperties.applications.isEmpty()) {
+    if (AppPropertiesProvider.applications.isEmpty()) {
         Text("There are no applications.")
     } else {
-        AppProperties.applications.forEach { (name, path) ->
+        AppPropertiesProvider.applications.forEach { (name, path) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("$name:$path")
+                Text(
+                    if (path == name) {
+                        name
+                    } else {
+                        "$name:$path"
+                    }
+                )
+
                 IconButton(onClick = {
-                    AppProperties.applications.remove(name)
+                    AppPropertiesProvider.applications.remove(name)
                 }) {
                     Icon(Icons.Default.Delete, "Delete")
                 }
@@ -84,17 +91,24 @@ fun ApplicationsSetting() {
     }
 
     if (showFields) {
+        var showPathField by remember { mutableStateOf(false) }
+
+        OutlinedTextField(
+            value = newApplicationName,
+            onValueChange = {
+                newApplicationName = it
+            },
+            label = { Text("Application name") }
+        )
+
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = newApplicationName,
-                onValueChange = {
-                    newApplicationName = it
-                },
-                label = { Text("Application name") }
-            )
+            Text("Specify path?")
+            Checkbox(showPathField, onCheckedChange = {
+                showPathField = it
+            })
+        }
 
-            Spacer(Modifier.width(MaterialTheme.spacing.small))
-
+        if (showPathField) {
             OutlinedTextField(
                 value = newApplicationPath,
                 onValueChange = {
@@ -102,15 +116,25 @@ fun ApplicationsSetting() {
                 },
                 label = { Text("Application path") }
             )
+        }
 
-            Spacer(Modifier.width(MaterialTheme.spacing.small))
-
+        Row {
             Button(onClick = {
-                AppProperties.applications[newApplicationName] = newApplicationPath
+                AppPropertiesProvider.addApplication(
+                    newApplicationName,
+                    newApplicationPath.ifBlank { newApplicationName })
                 newApplicationName = ""
                 newApplicationPath = ""
             }) {
                 Text("Add")
+            }
+
+            Spacer(Modifier.width(MaterialTheme.spacing.small))
+
+            Button(onClick = {
+                showFields = false
+            }) {
+                Text("Cancel")
             }
         }
     }

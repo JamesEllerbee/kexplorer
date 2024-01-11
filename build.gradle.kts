@@ -3,6 +3,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 plugins {
     kotlin("jvm") apply false
     id("org.jetbrains.compose") apply false
+    kotlin("plugin.serialization") apply false
 }
 
 group = "com.jamesellerbee"
